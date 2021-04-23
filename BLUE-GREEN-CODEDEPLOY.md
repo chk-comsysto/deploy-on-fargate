@@ -2,22 +2,27 @@
 
 ## Pre-requisites
 
-1. Make sure you have a domain and a certificate registered with ACM. Also note your hosted zone name!
+1. Make sure you have a domain and a certificate registered with ACM. Go to Route53 in your AWS Console and get the hosted zone name (HOSTED_ZONE_NAME hereafter)
 
-For example, my HOSTED_ZONE:
+For example:
 
 ```
 delta-comsysto-reply.de
 ```
 
-and the DOMAIN_NAME:
+Define the subdomain name (API_NAME hereafter) you'll use for your service e.g. `simple-api`.
+
+The full domain name (DOMAIN_NAME hereafter) will look like this:
 
 ```
-simple-api.delta-comsysto-reply.de
+<DOMAIN_NAME>=<API_NAME>.<HOSTED_ZONE_NAME>
 ```
+
+In my case it is: https://simple-api.delta-comsysto-reply.de
 
 2. Create an SSM Parameter named "CertificateArn-<DOMAIN_NAME>" and store the certificate Arn.
-   Example:
+
+Example:
 
 ```
 CertificateArn-simple-api.delta-comsysto-reply.de
@@ -25,16 +30,31 @@ CertificateArn-simple-api.delta-comsysto-reply.de
 
 3. Create a secret in AWS Secrets Manager and store your Github OAuth token. Secrets Manager stores seceret as a JSON file. For example, my secret is stored under the name `/github.com/sekibomazic` and has one field "token". For more details see [pipeline.ts](infra/blue-green-with-codedeploy/lib/pipeline/pipeline.ts)
 
-4. Check out [this repo](https://github.com/SekibOmazic/codedeploy-lifecycle-event-hooks) and deploy it. Please use the same domain name for your service as in Step 1. This will ensure you have a Lamda Hook that gets triggered on each deployment.
+4. Check out [this repo](https://github.com/SekibOmazic/codedeploy-lifecycle-event-hooks) and deploy it. Please use the same domain name for your service as in Step 1. This will ensure you have a Lambda Hook that gets triggered on each deployment.
 
 5. Create an account with dockerhub and get your username and password. We use it to aviod hitting rate limit when building the docker image.
 
 6. There are 3 scripts you will use to deploy your stack:
+
    [deploy-ecr-codebuild-stack.sh](infra/blue-green-with-codedeploy/bin/scripts/deploy-ecr-codebuild-stack.sh)
+
    [deploy-pipeline-stack.sh](infra/blue-green-with-codedeploy/bin/scripts/deploy-pipeline-stack.sh)
+
    [destroy.sh](infra/blue-green-with-codedeploy/bin/scripts/destroy.sh)
 
 Open each and update environment variables accordingly (all starting with <YOUR\_...>)
+
+7. Install `aws-cdk` on your machine. Easiest way for MacOS is using `brew`:
+
+```
+brew install aws-cdk
+```
+
+or update it to the newest version
+
+```
+brew upgrade
+```
 
 ## Deploy the stack
 
@@ -66,13 +86,13 @@ The first script creates an ECR repo and the CodeBuild project. The second scrip
 To get the "blue" page point your browser to
 
 ```
-https://simple-api.<YOUR_HOSTED_ZONE>
+https://<API_NAME>.<HOSTED_ZONE_NAME>
 ```
 
 In the second browser tab/window open
 
 ```
-https://simple-api.<YOUR_HOSTED_ZONE>:9000
+https://<API_NAME>.<HOSTED_ZONE_NAME>:9000
 ```
 
 Now change the color of your page to green. Just change line 13 of [index.js](src/index.js) to
@@ -85,8 +105,8 @@ Once the deployment is completed you'll only receive the green page.
 
 Now it's time to see Lambda trigger in action. Just change line 13 of [index.js](src/index.js) to `const color = RED` and push the new commit.
 Once the replacement group is built start refreshing the second browser tab (port 9000) and you'll see the red page. The original (production) group will still show the green page.
-Our Lambda hook will get triggered in the "AfterAllowTestTraffic" phase of deployment and it will check if the service return the "right" color (only blue or green are accepted) and if not, it will signal CodeDeploy that the deployment has failed.
-The replacement group will be destroyed and your production environment will never get the "red" page
+Our Lambda hook will get triggered in the `AfterAllowTestTraffic` phase of deployment and it will check if the service return the "right" color (only blue or green colors are accepted) and if not, it will signal CodeDeploy that the deployment has failed.
+The replacement group will be destroyed and your original group will never serve the "red" page
 
 ## Cleanup
 
